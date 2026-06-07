@@ -1,0 +1,38 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+
+# === Frontend (Vite / Node) ===
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.vite/
+frontend/coverage/
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/.git/
+
+# === Backend (Kotlin / Gradle) ===
+backend/.gradle/
+backend/build/
+backend/out/
+backend/bin/
+backend/!gradle/wrapper/gradle-wrapper.jar
+backend/*.log
+backend/hs_err_pid*
+
+# Local DB / runtime files
+*.sqlite
+*.sqlite3
+*.db
