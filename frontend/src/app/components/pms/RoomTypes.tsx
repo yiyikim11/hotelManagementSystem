@@ -1,97 +1,83 @@
-import { useState } from 'react';
-import { Plus, Edit2, Bed, Users, DollarSign } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Plus, Edit2, Trash2, Bed, Users, DollarSign } from 'lucide-react';
+import { roomTypesApi, type RoomType, type RoomTypeRequest } from '../../services/pms/roomTypesApi';
 import FormModal from '../shared/FormModal';
 
-interface RoomType {
-  id: string;
-  code: string;
-  name: string;
-  description: string;
-  baseOccupancy: number;
-  maxOccupancy: number;
-  baseRate: number;
-  currency: string;
-  createdAt: string;
-}
-
-const initialRoomTypes: RoomType[] = [
-  {
-    id: 'RT001', code: 'STD', name: 'Standard Room', description: 'Comfortable room with essential amenities',
-    baseOccupancy: 2, maxOccupancy: 2, baseRate: 120, currency: 'USD', createdAt: '2024-01-01',
-  },
-  {
-    id: 'RT002', code: 'DLX', name: 'Deluxe Room', description: 'Spacious room with premium furnishings and city view',
-    baseOccupancy: 2, maxOccupancy: 3, baseRate: 180, currency: 'USD', createdAt: '2024-01-01',
-  },
-  {
-    id: 'RT003', code: 'JRS', name: 'Junior Suite', description: 'Suite with separate living area and kitchenette',
-    baseOccupancy: 2, maxOccupancy: 4, baseRate: 260, currency: 'USD', createdAt: '2024-01-01',
-  },
-  {
-    id: 'RT004', code: 'EXS', name: 'Executive Suite', description: 'Full suite with dedicated work area and lounge access',
-    baseOccupancy: 2, maxOccupancy: 4, baseRate: 400, currency: 'USD', createdAt: '2024-01-01',
-  },
-  {
-    id: 'RT005', code: 'PRS', name: 'Presidential Suite', description: 'Top-floor luxury suite with panoramic views',
-    baseOccupancy: 2, maxOccupancy: 6, baseRate: 900, currency: 'USD', createdAt: '2024-01-01',
-  },
-];
+const emptyForm: Omit<RoomTypeRequest, 'baseOccupancy' | 'maxOccupancy' | 'baseRate'> & {
+  baseOccupancy: string; maxOccupancy: string; baseRate: string;
+} = {
+  code: '', name: '', description: '',
+  baseOccupancy: '2', maxOccupancy: '2', baseRate: '', currency: 'USD',
+};
 
 export default function RoomTypes() {
-  const [roomTypes, setRoomTypes] = useState<RoomType[]>(initialRoomTypes);
+  const [roomTypes, setRoomTypes] = useState<RoomType[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingType, setEditingType] = useState<RoomType | null>(null);
-  const [form, setForm] = useState({
-    code: '', name: '', description: '',
-    baseOccupancy: '2', maxOccupancy: '2', baseRate: '', currency: 'USD',
-  });
+  const [form, setForm] = useState(emptyForm);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const page = await roomTypesApi.list();
+      setRoomTypes(page.content);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load room types');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
 
   const handleAdd = () => {
     setEditingType(null);
-    setForm({ code: '', name: '', description: '', baseOccupancy: '2', maxOccupancy: '2', baseRate: '', currency: 'USD' });
+    setForm(emptyForm);
     setShowModal(true);
   };
 
   const handleEdit = (rt: RoomType) => {
     setEditingType(rt);
     setForm({
-      code: rt.code,
-      name: rt.name,
-      description: rt.description,
-      baseOccupancy: rt.baseOccupancy.toString(),
-      maxOccupancy: rt.maxOccupancy.toString(),
-      baseRate: rt.baseRate.toString(),
-      currency: rt.currency,
+      code: rt.code, name: rt.name, description: rt.description ?? '',
+      baseOccupancy: String(rt.baseOccupancy), maxOccupancy: String(rt.maxOccupancy),
+      baseRate: String(rt.baseRate), currency: rt.currency,
     });
     setShowModal(true);
   };
 
-  const handleSubmit = () => {
-    if (editingType) {
-      setRoomTypes(roomTypes.map(rt => rt.id === editingType.id ? {
-        ...rt,
-        code: form.code.toUpperCase(),
-        name: form.name,
-        description: form.description,
-        baseOccupancy: parseInt(form.baseOccupancy),
-        maxOccupancy: parseInt(form.maxOccupancy),
-        baseRate: parseFloat(form.baseRate),
-        currency: form.currency,
-      } : rt));
-    } else {
-      setRoomTypes([...roomTypes, {
-        id: `RT${String(roomTypes.length + 1).padStart(3, '0')}`,
-        code: form.code.toUpperCase(),
-        name: form.name,
-        description: form.description,
-        baseOccupancy: parseInt(form.baseOccupancy),
-        maxOccupancy: parseInt(form.maxOccupancy),
-        baseRate: parseFloat(form.baseRate),
-        currency: form.currency,
-        createdAt: new Date().toISOString().split('T')[0],
-      }]);
+  const handleSubmit = async () => {
+    const payload: RoomTypeRequest = {
+      code: form.code, name: form.name, description: form.description,
+      baseOccupancy: parseInt(form.baseOccupancy),
+      maxOccupancy: parseInt(form.maxOccupancy),
+      baseRate: parseFloat(form.baseRate),
+      currency: form.currency,
+    };
+    try {
+      if (editingType) {
+        await roomTypesApi.update(editingType.id, payload);
+      } else {
+        await roomTypesApi.create(payload);
+      }
+      setShowModal(false);
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to save room type');
     }
-    setShowModal(false);
+  };
+
+  const handleDelete = async (rt: RoomType) => {
+    if (!confirm(`Delete room type "${rt.name}"?`)) return;
+    try {
+      await roomTypesApi.delete(rt.id);
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to delete room type');
+    }
   };
 
   return (
@@ -99,185 +85,96 @@ export default function RoomTypes() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Room Types</h1>
-          <p className="text-gray-600 mt-1">Define room categories, occupancy limits, and base rates</p>
+          <p className="text-gray-600 mt-1">Manage room categories and base rates</p>
         </div>
-        <button
-          onClick={handleAdd}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-        >
-          <Plus className="w-5 h-5" />
-          New Room Type
+        <button onClick={handleAdd}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+          <Plus className="w-5 h-5" /> Add Room Type
         </button>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white rounded-lg shadow p-5">
-          <p className="text-sm text-gray-500">Room Types</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{roomTypes.length}</p>
-        </div>
-        <div className="bg-white rounded-lg shadow p-5">
-          <p className="text-sm text-gray-500">Lowest Base Rate</p>
-          <p className="text-2xl font-bold text-green-600 mt-1">
-            ${Math.min(...roomTypes.map(rt => rt.baseRate)).toFixed(0)}
-          </p>
-        </div>
-        <div className="bg-white rounded-lg shadow p-5">
-          <p className="text-sm text-gray-500">Highest Base Rate</p>
-          <p className="text-2xl font-bold text-blue-600 mt-1">
-            ${Math.max(...roomTypes.map(rt => rt.baseRate)).toFixed(0)}
-          </p>
-        </div>
-      </div>
+      {error && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>
+      )}
 
-      {/* Room Types Table */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-gray-50 border-b border-gray-200">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Code</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Room Type</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Description</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Base Occ.</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Max Occ.</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Base Rate</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200">
-            {roomTypes.map((rt) => (
-              <tr key={rt.id} className="hover:bg-gray-50">
-                <td className="px-6 py-4">
-                  <span className="font-mono text-sm font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded">{rt.code}</span>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-2">
-                    <Bed className="w-4 h-4 text-gray-400" />
-                    <span className="text-sm font-semibold text-gray-900">{rt.name}</span>
-                  </div>
-                </td>
-                <td className="px-6 py-4 text-sm text-gray-500 max-w-xs truncate">{rt.description}</td>
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-1 text-sm text-gray-700">
-                    <Users className="w-3 h-3" />
-                    {rt.baseOccupancy}
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-1 text-sm text-gray-700">
-                    <Users className="w-3 h-3" />
-                    {rt.maxOccupancy}
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-1 text-sm font-semibold text-gray-900">
-                    <DollarSign className="w-3 h-3 text-gray-400" />
-                    {rt.baseRate.toFixed(2)} {rt.currency}
-                  </div>
-                </td>
-                <td className="px-6 py-4 text-sm">
-                  <button
-                    onClick={() => handleEdit(rt)}
-                    className="text-blue-600 hover:text-blue-800 inline-flex items-center gap-1"
-                  >
+      {loading ? (
+        <div className="p-8 text-center text-gray-500">Loading…</div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {roomTypes.map(rt => (
+            <div key={rt.id} className="bg-white rounded-lg shadow p-6 space-y-4">
+              <div className="flex items-start justify-between">
+                <div>
+                  <span className="text-xs font-mono bg-blue-100 text-blue-700 px-2 py-0.5 rounded">{rt.code}</span>
+                  <h3 className="text-lg font-semibold text-gray-900 mt-1">{rt.name}</h3>
+                  {rt.description && <p className="text-sm text-gray-500 mt-1">{rt.description}</p>}
+                </div>
+                <div className="flex gap-1">
+                  <button onClick={() => handleEdit(rt)} className="p-1 text-blue-600 hover:bg-blue-50 rounded" title="Edit">
                     <Edit2 className="w-4 h-4" />
-                    Edit
                   </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+                  <button onClick={() => handleDelete(rt)} className="p-1 text-red-600 hover:bg-red-50 rounded" title="Delete">
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-3 pt-2 border-t border-gray-100">
+                <div className="flex items-center gap-1 text-sm text-gray-600">
+                  <Bed className="w-4 h-4 text-gray-400" />
+                  <span>Base: {rt.baseOccupancy}</span>
+                </div>
+                <div className="flex items-center gap-1 text-sm text-gray-600">
+                  <Users className="w-4 h-4 text-gray-400" />
+                  <span>Max: {rt.maxOccupancy}</span>
+                </div>
+                <div className="flex items-center gap-1 text-sm font-medium text-green-700">
+                  <DollarSign className="w-4 h-4" />
+                  <span>{Number(rt.baseRate).toFixed(0)}/{rt.currency}</span>
+                </div>
+              </div>
+            </div>
+          ))}
+          {roomTypes.length === 0 && (
+            <div className="col-span-3 p-8 text-center text-gray-500">No room types found</div>
+          )}
+        </div>
+      )}
 
-      {/* Add/Edit Modal */}
       <FormModal
         isOpen={showModal}
         onClose={() => setShowModal(false)}
         onSubmit={handleSubmit}
-        title={editingType ? 'Edit Room Type' : 'New Room Type'}
-        submitText={editingType ? 'Update' : 'Create'}
-        size="lg"
+        title={editingType ? `Edit — ${editingType.name}` : 'Add Room Type'}
+        submitText={editingType ? 'Save Changes' : 'Create Room Type'}
       >
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Code *</label>
-            <input
-              type="text"
-              value={form.code}
-              onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
-              placeholder="DLX"
-              maxLength={10}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 uppercase"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Name *</label>
-            <input
-              type="text"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="Deluxe Room"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              required
-            />
-          </div>
+          {[
+            { label: 'Code *', key: 'code', placeholder: 'STD' },
+            { label: 'Name *', key: 'name', placeholder: 'Standard Room' },
+            { label: 'Base Occupancy *', key: 'baseOccupancy', type: 'number' },
+            { label: 'Max Occupancy *', key: 'maxOccupancy', type: 'number' },
+            { label: 'Base Rate *', key: 'baseRate', type: 'number', placeholder: '120.00' },
+            { label: 'Currency', key: 'currency', placeholder: 'USD' },
+          ].map(({ label, key, type = 'text', placeholder }) => (
+            <div key={key}>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+              <input
+                type={type}
+                value={(form as Record<string, string>)[key]}
+                onChange={(e) => setForm({ ...form, [key]: e.target.value })}
+                placeholder={placeholder}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+          ))}
           <div className="md:col-span-2">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
             <textarea
               value={form.description}
               onChange={(e) => setForm({ ...form, description: e.target.value })}
               rows={2}
-              placeholder="Spacious room with premium furnishings..."
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Base Occupancy *</label>
-            <input
-              type="number"
-              min="1"
-              value={form.baseOccupancy}
-              onChange={(e) => setForm({ ...form, baseOccupancy: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Max Occupancy *</label>
-            <input
-              type="number"
-              min="1"
-              value={form.maxOccupancy}
-              onChange={(e) => setForm({ ...form, maxOccupancy: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Base Rate *</label>
-            <input
-              type="number"
-              step="0.01"
-              value={form.baseRate}
-              onChange={(e) => setForm({ ...form, baseRate: e.target.value })}
-              placeholder="180.00"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Currency</label>
-            <select
-              value={form.currency}
-              onChange={(e) => setForm({ ...form, currency: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="USD">USD</option>
-              <option value="EUR">EUR</option>
-              <option value="GBP">GBP</option>
-            </select>
           </div>
         </div>
       </FormModal>

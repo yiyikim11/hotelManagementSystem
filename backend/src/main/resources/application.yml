@@ -30,6 +30,11 @@ server:
     context-path: /api
 
 app:
+  seed:
+    # Set ADMIN_EMAIL / ADMIN_INITIAL_PASSWORD env vars to override.
+    # If ADMIN_INITIAL_PASSWORD is absent a secure random password is generated
+    # and printed once to the log — change it immediately afterwards.
+    admin-email: ${ADMIN_EMAIL:admin@hotel.local}
   security:
     jwt:
       secret: ${JWT_SECRET}
@@ -55,4 +60,4 @@ management:
 logging:
   level:
     root: INFO
-    com.otres.hotelpms: DEBUG
+    hotelpms: DEBUG

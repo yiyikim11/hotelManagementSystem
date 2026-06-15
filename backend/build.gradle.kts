@@ -42,6 +42,10 @@ dependencies {
     compileOnly("org.projectlombok:lombok")
     annotationProcessor("org.projectlombok:lombok")
 
+    // Flyway
+    implementation("org.flywaydb:flyway-core")
+    runtimeOnly("org.flywaydb:flyway-database-postgresql")
+
     // Actuator
     implementation("org.springframework.boot:spring-boot-starter-actuator")
 

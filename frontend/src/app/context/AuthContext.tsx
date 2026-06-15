@@ -1,18 +1,18 @@
 import React, { type ReactNode } from 'react';
+import { api } from '../lib/apiClient';
 
-interface User {
+interface AuthUser {
   id: string;
   username: string;
   fullName: string;
   email: string;
-  role: 'admin' | 'manager' | 'staff';
-  department: string;
+  role: string;
+  department: string | null;
 }
 
 interface AuthContextType {
-  user: User | null;
-  login: (username: string, password: string) => boolean;
-  signup: (username: string, email: string, password: string, fullName: string) => boolean;
+  user: AuthUser | null;
+  login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
 }
@@ -20,63 +20,39 @@ interface AuthContextType {
 const AuthContext = React.createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  // Initialize state with saved user from localStorage
-  const [user, setUser] = React.useState<User | null>(() => {
-    const savedUser = localStorage.getItem('hotelUser');
-    return savedUser ? JSON.parse(savedUser) : null;
+  const [user, setUser] = React.useState<AuthUser | null>(() => {
+    try {
+      const saved = localStorage.getItem('authUser');
+      return saved ? JSON.parse(saved) : null;
+    } catch {
+      return null;
+    }
   });
 
-  const login = (username: string, password: string): boolean => {
-    // Demo login - accept any credentials
-    if (username && password) {
-      const demoUser: User = {
-        id: 'U001',
-        username: username,
-        fullName: username === 'admin' ? 'Admin User' : 'Demo User',
-        email: `${username}@hotel.com`,
-        role: username === 'admin' ? 'admin' : 'staff',
-        department: 'Management'
-      };
-      setUser(demoUser);
-      localStorage.setItem('hotelUser', JSON.stringify(demoUser));
-      return true;
-    }
-    return false;
-  };
+  const login = async (email: string, password: string): Promise<void> => {
+    const data = await api.post<{ token: string }>('/auth/login', { email, password });
+    localStorage.setItem('authToken', data.token);
 
-  const signup = (username: string, email: string, password: string, fullName: string): boolean => {
-    if (username && email && password && fullName) {
-      const newUser: User = {
-        id: `U${Date.now()}`,
-        username,
-        fullName,
-        email,
-        role: 'staff',
-        department: 'Front Office'
-      };
-      setUser(newUser);
-      localStorage.setItem('hotelUser', JSON.stringify(newUser));
-      return true;
-    }
-    return false;
+    const me = await api.get<AuthUser>('/auth/me');
+    setUser(me);
+    localStorage.setItem('authUser', JSON.stringify(me));
   };
 
   const logout = () => {
     setUser(null);
-    localStorage.removeItem('hotelUser');
+    localStorage.removeItem('authToken');
+    localStorage.removeItem('authUser');
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, signup, logout, isAuthenticated: !!user }}>
+    <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
 export function useAuth() {
-  const context = React.useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within AuthProvider');
-  }
-  return context;
+  const ctx = React.useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
+  return ctx;
 }
