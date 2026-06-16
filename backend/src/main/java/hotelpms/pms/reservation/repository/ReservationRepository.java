@@ -40,6 +40,8 @@ public interface ReservationRepository extends JpaRepository<Reservation, UUID> 
         """)
     List<Reservation> findInHouseForDate(@Param("date") LocalDate date);
 
+    Page<Reservation> findByGuest_EmailAndGuest_DeletedAtIsNull(String email, Pageable pageable);
+
     long countByStatus(ReservationStatus status);
 
     @Query("""

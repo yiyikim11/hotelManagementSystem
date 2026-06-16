@@ -46,4 +46,19 @@ export const roomTypesApi = {
 
   availability: (from: string, to: string) =>
     api.get<AvailabilityItem[]>(`/pms/room-types/availability?${new URLSearchParams({ from, to })}`),
+
+  listPublic: () =>
+    api.get<PublicRoomType[]>(`/public/room-types`),
+
+  availabilityPublic: (from: string, to: string) =>
+    api.get<AvailabilityItem[]>(`/public/room-types/availability?${new URLSearchParams({ from, to })}`),
 };
+
+export interface PublicRoomType extends RoomType {
+  websiteDescription: string | null;
+  websitePhotos: string[];
+  displayOrder: number | null;
+  promotionalRate: number | null;
+  promotionalRateDescription: string | null;
+  featuredAmenities: string[];
+}

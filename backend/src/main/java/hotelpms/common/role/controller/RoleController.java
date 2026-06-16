@@ -22,6 +22,6 @@ public class RoleController {
     @GetMapping
     public ResponseEntity<List<RoleResponse>> list() {
         return ResponseEntity.ok(
-                roleRepository.findAll().stream().map(RoleResponse::from).toList());
+                roleRepository.findAllWithPermissions().stream().map(RoleResponse::from).toList());
     }
 }

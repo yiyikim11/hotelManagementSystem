@@ -17,7 +17,7 @@ public interface ReservationRoomRepository extends JpaRepository<ReservationRoom
     @Query("""
         SELECT COUNT(rr) FROM ReservationRoom rr
         WHERE rr.roomType.id = :roomTypeId
-          AND rr.reservation.status NOT IN ('CANCELLED', 'NO_SHOW')
+          AND rr.reservation.status NOT IN ('CANCELLED', 'NO_SHOW', 'CHECKED_OUT')
           AND rr.arrivalDate < :to
           AND rr.departureDate > :from
         """)

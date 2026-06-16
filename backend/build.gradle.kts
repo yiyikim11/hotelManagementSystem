@@ -26,6 +26,10 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     runtimeOnly("org.postgresql:postgresql")
 
+    // MongoDB (document-based store for free-form data: guest profiles,
+    // marketing templates, notification payloads, payment-gateway events).
+    implementation("org.springframework.boot:spring-boot-starter-data-mongodb")
+
     // Cache / Redis
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
 
