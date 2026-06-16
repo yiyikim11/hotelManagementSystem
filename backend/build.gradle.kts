@@ -46,6 +46,9 @@ dependencies {
     implementation("org.flywaydb:flyway-core")
     runtimeOnly("org.flywaydb:flyway-database-postgresql")
 
+    // .env loader (reads backend/.env into Spring's Environment)
+    implementation("me.paulschwarz:spring-dotenv:4.0.0")
+
     // Actuator
     implementation("org.springframework.boot:spring-boot-starter-actuator")
 

@@ -30,7 +30,7 @@ public class AppUserDetailsService implements UserDetailsService {
         if (user.getRole() != null) {
             authorities.add(new SimpleGrantedAuthority("ROLE_" + user.getRole().getName()));
             user.getRole().getPermissions().forEach(p ->
-                    authorities.add(new SimpleGrantedAuthority("PERM_" + p.getCode())));
+                    authorities.add(new SimpleGrantedAuthority(p.getCode())));
         }
 
         return new org.springframework.security.core.userdetails.User(

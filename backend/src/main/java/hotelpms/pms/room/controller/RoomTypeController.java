@@ -11,6 +11,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -25,11 +26,13 @@ public class RoomTypeController {
     private final RoomTypeService roomTypeService;
 
     @GetMapping
+    @PreAuthorize("hasAuthority('ROOMS_READ')")
     public ResponseEntity<Page<RoomTypeResponse>> list(Pageable pageable) {
         return ResponseEntity.ok(roomTypeService.list(pageable));
     }
 
     @GetMapping("/availability")
+    @PreAuthorize("hasAuthority('ROOMS_READ')")
     public ResponseEntity<List<AvailabilityResponse>> availability(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
@@ -37,22 +40,26 @@ public class RoomTypeController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAuthority('ROOMS_READ')")
     public ResponseEntity<RoomTypeResponse> get(@PathVariable UUID id) {
         return ResponseEntity.ok(roomTypeService.findById(id));
     }
 
     @PostMapping
+    @PreAuthorize("hasAuthority('ROOMS_WRITE')")
     public ResponseEntity<RoomTypeResponse> create(@Valid @RequestBody RoomTypeRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(roomTypeService.create(request));
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAuthority('ROOMS_WRITE')")
     public ResponseEntity<RoomTypeResponse> update(@PathVariable UUID id,
                                                    @Valid @RequestBody RoomTypeRequest request) {
         return ResponseEntity.ok(roomTypeService.update(id, request));
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('ROOMS_WRITE')")
     public ResponseEntity<Void> delete(@PathVariable UUID id) {
         roomTypeService.delete(id);
         return ResponseEntity.noContent().build();

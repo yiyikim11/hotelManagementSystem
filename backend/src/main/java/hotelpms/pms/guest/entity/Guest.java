@@ -9,6 +9,7 @@ import lombok.Setter;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.UUID;
 
 @Entity
 @Table(name = "guests")
@@ -68,4 +69,8 @@ public class Guest extends BaseEntity {
     private boolean blacklisted = false;
 
     private Instant deletedAt;
+
+    /** FK to users.id — set when a guest registers a portal account. */
+    @Column(name = "user_id")
+    private UUID userId;
 }
