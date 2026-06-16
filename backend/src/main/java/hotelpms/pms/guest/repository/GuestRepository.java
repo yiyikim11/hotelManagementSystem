@@ -14,6 +14,8 @@ public interface GuestRepository extends JpaRepository<Guest, UUID> {
 
     boolean existsByEmail(String email);
 
+    Optional<Guest> findByUserId(UUID userId);
+
     Optional<Guest> findByEmailAndDeletedAtIsNull(String email);
 
     @Query("""

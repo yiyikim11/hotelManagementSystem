@@ -16,6 +16,8 @@ public interface ReservationRepository extends JpaRepository<Reservation, UUID> 
 
     Page<Reservation> findByStatus(ReservationStatus status, Pageable pageable);
 
+    Page<Reservation> findByGuest_Id(UUID guestId, Pageable pageable);
+
     @Query("""
         SELECT r FROM Reservation r
         WHERE r.arrivalDate = :date

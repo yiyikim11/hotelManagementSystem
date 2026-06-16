@@ -7,6 +7,7 @@ import hotelpms.pms.report.service.ReportService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
@@ -15,6 +16,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/pms/reports")
 @RequiredArgsConstructor
+@PreAuthorize("hasAuthority('REPORTS_READ')")
 public class ReportController {
 
     private final ReportService reportService;
