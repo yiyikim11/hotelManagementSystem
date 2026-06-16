@@ -27,7 +27,10 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({ message: res.statusText }));
-    throw new Error(body.message ?? `Request failed: ${res.status}`);
+    const violations = Array.isArray(body.violations) && body.violations.length > 0
+      ? ': ' + body.violations.map((v: { field: string; message: string }) => `${v.field} ${v.message}`).join(', ')
+      : '';
+    throw new Error((body.message ?? `Request failed: ${res.status}`) + violations);
   }
 
   if (res.status === 204) {

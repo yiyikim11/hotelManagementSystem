@@ -1,360 +1,374 @@
-import { useState } from 'react';
-import { Plus, DollarSign, Eye, CheckCircle } from 'lucide-react';
-import { dataStore } from '../../data/store';
-import { Charge } from '../../types';
+import { useState, useEffect, useCallback } from 'react';
+import { Plus, DollarSign, Eye, XCircle, Lock } from 'lucide-react';
+import {
+  folioApi,
+  type Folio,
+  type ChargeType,
+  type PostChargeRequest,
+} from '../../services/pms/folioApi';
 import FormModal from '../shared/FormModal';
 import Modal from '../shared/Modal';
 
+const CHARGE_TYPES: ChargeType[] = [
+  'ROOM', 'TAX', 'FOOD', 'MINIBAR', 'LAUNDRY', 'SPA', 'PARKING', 'OTHER', 'CANCELLATION_FEE',
+];
+
+const chargeTypeColor: Record<ChargeType, string> = {
+  ROOM: 'bg-blue-100 text-blue-700',
+  TAX: 'bg-purple-100 text-purple-700',
+  FOOD: 'bg-orange-100 text-orange-700',
+  MINIBAR: 'bg-green-100 text-green-700',
+  LAUNDRY: 'bg-yellow-100 text-yellow-700',
+  SPA: 'bg-pink-100 text-pink-700',
+  PARKING: 'bg-indigo-100 text-indigo-700',
+  OTHER: 'bg-gray-100 text-gray-700',
+  CANCELLATION_FEE: 'bg-red-100 text-red-700',
+};
+
+const emptyChargeForm: PostChargeRequest = {
+  chargeType: 'OTHER',
+  description: '',
+  quantity: 1,
+  unitPrice: 0,
+};
+
 export default function PMSCharges() {
-  const [charges, setCharges] = useState(dataStore.getCharges());
-  const [reservations] = useState(dataStore.getReservations());
+  const [folios, setFolios] = useState<Folio[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const [viewFolio, setViewFolio] = useState<Folio | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [viewChargeId, setViewChargeId] = useState<string | null>(null);
-  const [formData, setFormData] = useState({
-    reservationId: '',
-    type: '',
-    description: '',
-    amount: '',
-    date: new Date().toISOString().split('T')[0]
-  });
+  const [selectedFolioId, setSelectedFolioId] = useState('');
+  const [chargeForm, setChargeForm] = useState<PostChargeRequest>(emptyChargeForm);
 
-  const getChargeTypeColor = (type: string) => {
-    const colors: Record<string, string> = {
-      'room': 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300',
-      'tax': 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300',
-      'minibar': 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300',
-      'laundry': 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300',
-      'food': 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300',
-      'other': 'bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-gray-200'
-    };
-    return colors[type] || 'bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-gray-200';
-  };
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const page = await folioApi.list();
+      setFolios(page.content);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load folios');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  const totalCharges = charges.reduce((sum, c) => sum + c.amount, 0);
-  const paidCharges = charges.filter(c => c.isPaid).reduce((sum, c) => sum + c.amount, 0);
-  const unpaidCharges = totalCharges - paidCharges;
+  useEffect(() => { load(); }, [load]);
 
-  // Get all charges for a specific reservation (for invoice view)
-  const getChargesForReservation = (reservationId: string) => {
-    return charges.filter(c => c.reservationId === reservationId);
-  };
+  const totalAmount = folios.reduce((s, f) => s + Number(f.totalAmount), 0);
+  const paidAmount = folios.filter(f => f.status === 'CLOSED').reduce((s, f) => s + Number(f.totalAmount), 0);
+  const unpaidAmount = folios.filter(f => f.status === 'OPEN').reduce((s, f) => s + Number(f.totalAmount), 0);
 
-  const viewedCharge = viewChargeId ? charges.find(c => c.id === viewChargeId) : null;
-  const invoiceCharges = viewedCharge ? getChargesForReservation(viewedCharge.reservationId) : [];
-  const invoiceTotal = invoiceCharges.reduce((sum, c) => sum + c.amount, 0);
-
-  const handleSubmit = () => {
-    const newCharge: Charge = {
-      id: `CHG${String(charges.length + 1).padStart(3, '0')}`,
-      reservationId: formData.reservationId,
-      type: formData.type as Charge['type'],
-      description: formData.description,
-      amount: parseFloat(formData.amount),
-      date: formData.date,
-      isPaid: false
-    };
-
-    setCharges([...charges, newCharge]);
-    dataStore.charges.push(newCharge);
-    setShowAddModal(false);
-    setFormData({
-      reservationId: '',
-      type: '',
-      description: '',
-      amount: '',
-      date: new Date().toISOString().split('T')[0]
-    });
-  };
-
-  const markAsPaid = (chargeId: string) => {
-    const updatedCharges = charges.map(c =>
-      c.id === chargeId ? { ...c, isPaid: true } : c
-    );
-    setCharges(updatedCharges);
-    const chargeIndex = dataStore.charges.findIndex(c => c.id === chargeId);
-    if (chargeIndex !== -1) {
-      dataStore.charges[chargeIndex].isPaid = true;
+  const handleAddCharge = async () => {
+    if (!selectedFolioId) return;
+    try {
+      await folioApi.postCharge(selectedFolioId, chargeForm);
+      setShowAddModal(false);
+      setChargeForm(emptyChargeForm);
+      setSelectedFolioId('');
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to post charge');
     }
   };
+
+  const handleCloseFolio = async (id: string) => {
+    if (!confirm('Close this folio? This marks it as settled and no further charges can be posted.')) return;
+    try {
+      await folioApi.close(id);
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to close folio');
+    }
+  };
+
+  const handleVoidItem = async (folioId: string, itemId: string) => {
+    if (!confirm('Void this charge item?')) return;
+    try {
+      const updated = await folioApi.voidItem(folioId, itemId);
+      setViewFolio(updated);
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to void item');
+    }
+  };
+
+  const openFolios = folios.filter(f => f.status === 'OPEN');
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Charges & Invoicing</h1>
-          <p className="text-gray-600 dark:text-gray-300 mt-1">Track room charges and extra expenses</p>
+          <p className="text-gray-600 dark:text-gray-300 mt-1">Track folio charges and guest invoices</p>
         </div>
         <button
-          onClick={() => setShowAddModal(true)}
+          onClick={() => { setShowAddModal(true); setSelectedFolioId(''); setChargeForm(emptyChargeForm); }}
           className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
         >
           <Plus className="w-5 h-5" />
-          Add Charge
+          Post Charge
         </button>
       </div>
+
+      {error && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>
+      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white dark:bg-zinc-800 rounded-lg shadow p-6">
           <div className="flex items-center gap-3">
-            <div className="bg-blue-500 p-3 rounded-lg">
-              <DollarSign className="w-6 h-6 text-white" />
-            </div>
+            <div className="bg-blue-500 p-3 rounded-lg"><DollarSign className="w-6 h-6 text-white" /></div>
             <div>
-              <p className="text-sm text-gray-600 dark:text-gray-300">Total Charges</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">${totalCharges}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-300">Total Billed</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">${totalAmount.toFixed(2)}</p>
             </div>
           </div>
         </div>
         <div className="bg-white dark:bg-zinc-800 rounded-lg shadow p-6">
           <div className="flex items-center gap-3">
-            <div className="bg-green-500 p-3 rounded-lg">
-              <DollarSign className="w-6 h-6 text-white" />
-            </div>
+            <div className="bg-green-500 p-3 rounded-lg"><DollarSign className="w-6 h-6 text-white" /></div>
             <div>
-              <p className="text-sm text-gray-600 dark:text-gray-300">Paid</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">${paidCharges}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-300">Settled (Closed Folios)</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">${paidAmount.toFixed(2)}</p>
             </div>
           </div>
         </div>
         <div className="bg-white dark:bg-zinc-800 rounded-lg shadow p-6">
           <div className="flex items-center gap-3">
-            <div className="bg-orange-500 p-3 rounded-lg">
-              <DollarSign className="w-6 h-6 text-white" />
-            </div>
+            <div className="bg-orange-500 p-3 rounded-lg"><DollarSign className="w-6 h-6 text-white" /></div>
             <div>
-              <p className="text-sm text-gray-600 dark:text-gray-300">Unpaid</p>
-              <p className="text-2xl font-bold text-gray-900 dark:text-white">${unpaidCharges}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-300">Outstanding (Open Folios)</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">${unpaidAmount.toFixed(2)}</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Charges Table */}
+      {/* Folios Table */}
       <div className="bg-white dark:bg-zinc-800 rounded-lg shadow overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-gray-50 dark:bg-zinc-700/40 border-b border-gray-200 dark:border-zinc-700">
-            <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-zinc-400 uppercase">Charge ID</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-zinc-400 uppercase">Reservation</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-zinc-400 uppercase">Amount</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-zinc-400 uppercase">Date</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-zinc-400 uppercase">Status</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-zinc-400 uppercase">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-200 dark:divide-zinc-700">
-            {charges.map((charge) => {
-              const reservation = reservations.find(r => r.id === charge.reservationId);
-              return (
-                <tr key={charge.id} className="hover:bg-gray-50 dark:hover:bg-zinc-800">
+        {loading ? (
+          <div className="p-8 text-center text-gray-500">Loading…</div>
+        ) : (
+          <table className="w-full">
+            <thead className="bg-gray-50 dark:bg-zinc-700/40 border-b border-gray-200 dark:border-zinc-700">
+              <tr>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-zinc-400 uppercase">Confirmation #</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-zinc-400 uppercase">Guest</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-zinc-400 uppercase">Items</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-zinc-400 uppercase">Total</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-zinc-400 uppercase">Status</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-zinc-400 uppercase">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200 dark:divide-zinc-700">
+              {folios.map((folio) => (
+                <tr key={folio.id} className="hover:bg-gray-50 dark:hover:bg-zinc-800">
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                    {charge.id}
+                    {folio.confirmationNumber ?? folio.id.slice(0, 8)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                    {charge.reservationId}
-                    <div className="text-xs text-gray-500 dark:text-zinc-400">Room {reservation?.roomNumber}</div>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
-                    ${charge.amount}
+                    {folio.guestName ?? '—'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300">
-                    {charge.date}
+                    {folio.items.filter(i => !i.voidedAt).length} active
+                    {folio.items.some(i => i.voidedAt) && (
+                      <span className="ml-1 text-xs text-gray-400">({folio.items.filter(i => i.voidedAt).length} voided)</span>
+                    )}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">
+                    ${Number(folio.totalAmount).toFixed(2)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 py-1 text-xs rounded-full ${
-                      charge.isPaid ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300' : 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300'
-                    }`}>
-                      {charge.isPaid ? 'Paid' : 'Pending'}
+                    <span className={`px-2 py-1 text-xs rounded-full ${folio.status === 'CLOSED' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                      {folio.status === 'CLOSED' ? 'Settled' : 'Open'}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm">
                     <button
-                      onClick={() => setViewChargeId(charge.id)}
-                      className="text-blue-600 hover:text-blue-800 dark:text-blue-200 mr-3 inline-flex items-center gap-1"
+                      onClick={() => setViewFolio(folio)}
+                      className="text-blue-600 hover:text-blue-800 dark:text-blue-400 mr-3 inline-flex items-center gap-1"
                     >
                       <Eye className="w-4 h-4" />
                       View
                     </button>
-                    {!charge.isPaid && (
+                    {folio.status === 'OPEN' && (
                       <button
-                        onClick={() => markAsPaid(charge.id)}
-                        className="text-green-600 hover:text-green-800 dark:text-green-200 inline-flex items-center gap-1"
+                        onClick={() => handleCloseFolio(folio.id)}
+                        className="text-green-600 hover:text-green-800 inline-flex items-center gap-1"
                       >
-                        <CheckCircle className="w-4 h-4" />
-                        Mark Paid
+                        <Lock className="w-4 h-4" />
+                        Close
                       </button>
                     )}
                   </td>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              ))}
+              {folios.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="px-6 py-8 text-center text-gray-500">No folios found</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        )}
       </div>
 
-      {/* Add Charge Modal */}
+      {/* Post Charge Modal */}
       <FormModal
         isOpen={showAddModal}
         onClose={() => setShowAddModal(false)}
-        onSubmit={handleSubmit}
-        title="Add New Charge"
-        submitText="Add Charge"
+        onSubmit={handleAddCharge}
+        title="Post Charge to Folio"
+        submitText="Post Charge"
       >
         <div className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">Reservation *</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">Folio (Open) *</label>
             <select
-              value={formData.reservationId}
-              onChange={(e) => setFormData({ ...formData, reservationId: e.target.value })}
+              value={selectedFolioId}
+              onChange={(e) => setSelectedFolioId(e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 dark:border-zinc-600 rounded-lg focus:ring-2 focus:ring-blue-500"
               required
             >
-              <option value="">Select reservation...</option>
-              {reservations.filter(r => r.status === 'checked-in' || r.status === 'confirmed').map(res => (
-                <option key={res.id} value={res.id}>
-                  {res.id} - Room {res.roomNumber}
+              <option value="">Select folio…</option>
+              {openFolios.map(f => (
+                <option key={f.id} value={f.id}>
+                  {f.confirmationNumber ?? f.id.slice(0, 8)} — {f.guestName ?? 'Unknown guest'}
                 </option>
               ))}
             </select>
           </div>
-
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">Charge Type *</label>
             <select
-              value={formData.type}
-              onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+              value={chargeForm.chargeType}
+              onChange={(e) => setChargeForm({ ...chargeForm, chargeType: e.target.value as ChargeType })}
               className="w-full px-4 py-2 border border-gray-300 dark:border-zinc-600 rounded-lg focus:ring-2 focus:ring-blue-500"
               required
             >
-              <option value="">Select type...</option>
-              <option value="room">Room</option>
-              <option value="tax">Tax</option>
-              <option value="minibar">Minibar</option>
-              <option value="laundry">Laundry</option>
-              <option value="food">Food Service</option>
-              <option value="other">Other</option>
+              {CHARGE_TYPES.map(ct => (
+                <option key={ct} value={ct}>{ct.replace('_', ' ')}</option>
+              ))}
             </select>
           </div>
-
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">Description *</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">Description</label>
             <textarea
-              value={formData.description}
-              onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-              placeholder="Describe the charge..."
-              rows={3}
+              value={chargeForm.description ?? ''}
+              onChange={(e) => setChargeForm({ ...chargeForm, description: e.target.value })}
+              rows={2}
+              placeholder="Describe the charge…"
               className="w-full px-4 py-2 border border-gray-300 dark:border-zinc-600 rounded-lg focus:ring-2 focus:ring-blue-500"
-              required
             />
           </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">Amount ($) *</label>
-            <input
-              type="number"
-              step="0.01"
-              value={formData.amount}
-              onChange={(e) => setFormData({ ...formData, amount: e.target.value })}
-              placeholder="50.00"
-              className="w-full px-4 py-2 border border-gray-300 dark:border-zinc-600 rounded-lg focus:ring-2 focus:ring-blue-500"
-              required
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">Quantity *</label>
+              <input
+                type="number"
+                min="1"
+                value={chargeForm.quantity}
+                onChange={(e) => setChargeForm({ ...chargeForm, quantity: parseInt(e.target.value) || 1 })}
+                className="w-full px-4 py-2 border border-gray-300 dark:border-zinc-600 rounded-lg focus:ring-2 focus:ring-blue-500"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">Unit Price ($) *</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={chargeForm.unitPrice}
+                onChange={(e) => setChargeForm({ ...chargeForm, unitPrice: parseFloat(e.target.value) || 0 })}
+                placeholder="50.00"
+                className="w-full px-4 py-2 border border-gray-300 dark:border-zinc-600 rounded-lg focus:ring-2 focus:ring-blue-500"
+                required
+              />
+            </div>
           </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">Date *</label>
-            <input
-              type="date"
-              value={formData.date}
-              onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-              className="w-full px-4 py-2 border border-gray-300 dark:border-zinc-600 rounded-lg focus:ring-2 focus:ring-blue-500"
-              required
-            />
+          <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-sm text-gray-700 dark:text-gray-300">
+            Total: <strong>${(chargeForm.quantity * chargeForm.unitPrice).toFixed(2)}</strong>
           </div>
         </div>
       </FormModal>
 
-      {/* View Invoice Modal */}
-      {viewedCharge && (
+      {/* Invoice / Folio Detail Modal */}
+      {viewFolio && (
         <Modal
-          isOpen={!!viewedCharge}
-          onClose={() => setViewChargeId(null)}
-          title="Invoice"
-          size="md"
+          isOpen
+          onClose={() => setViewFolio(null)}
+          title={`Folio — ${viewFolio.confirmationNumber ?? viewFolio.id.slice(0, 8)}`}
+          size="lg"
         >
-          <div className="space-y-6">
-            {/* Invoice Header */}
-            <div className="text-center border-b border-gray-200 dark:border-zinc-700 pb-4">
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white">INVOICE</h2>
-              <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">Hotel Manager</p>
-            </div>
-
-            {/* Invoice Details */}
+          <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
-                <p className="text-gray-600 dark:text-gray-300">Invoice ID:</p>
-                <p className="font-medium text-gray-900 dark:text-white">{viewedCharge.id}</p>
+                <p className="text-gray-500">Guest</p>
+                <p className="font-medium text-gray-900 dark:text-white">{viewFolio.guestName ?? '—'}</p>
               </div>
               <div>
-                <p className="text-gray-600 dark:text-gray-300">Date:</p>
-                <p className="font-medium text-gray-900 dark:text-white">{viewedCharge.date}</p>
-              </div>
-              <div>
-                <p className="text-gray-600 dark:text-gray-300">Reservation:</p>
-                <p className="font-medium text-gray-900 dark:text-white">{viewedCharge.reservationId}</p>
-              </div>
-              <div>
-                <p className="text-gray-600 dark:text-gray-300">Room Number:</p>
-                <p className="font-medium text-gray-900 dark:text-white">
-                  {reservations.find(r => r.id === viewedCharge.reservationId)?.roomNumber}
-                </p>
+                <p className="text-gray-500">Status</p>
+                <span className={`px-2 py-0.5 text-xs rounded-full ${viewFolio.status === 'CLOSED' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                  {viewFolio.status === 'CLOSED' ? 'Settled' : 'Open'}
+                </span>
               </div>
             </div>
 
-            {/* Charges List */}
-            <div className="border-t border-b border-gray-200 dark:border-zinc-700 py-4">
-              <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Charges</h3>
-              <div className="space-y-3">
-                {invoiceCharges.map((charge) => (
-                  <div key={charge.id} className="flex justify-between items-start">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className={`px-2 py-0.5 text-xs rounded-full ${getChargeTypeColor(charge.type)}`}>
-                          {charge.type}
-                        </span>
+            <div className="border-t border-gray-200 dark:border-zinc-700 pt-4">
+              <h3 className="font-semibold text-gray-900 dark:text-white mb-3">Charge Items</h3>
+              {viewFolio.items.length === 0 ? (
+                <p className="text-gray-500 text-sm">No charges posted yet.</p>
+              ) : (
+                <div className="space-y-2">
+                  {viewFolio.items.map((item) => (
+                    <div key={item.id} className={`flex justify-between items-center p-3 rounded-lg ${item.voidedAt ? 'bg-gray-50 dark:bg-zinc-700/20 opacity-60' : 'bg-gray-50 dark:bg-zinc-700/40'}`}>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-0.5 text-xs rounded-full ${chargeTypeColor[item.chargeType]}`}>
+                            {item.chargeType.replace('_', ' ')}
+                          </span>
+                          {item.voidedAt && (
+                            <span className="text-xs text-red-500 flex items-center gap-0.5">
+                              <XCircle className="w-3 h-3" />voided
+                            </span>
+                          )}
+                        </div>
+                        {item.description && (
+                          <p className="text-sm text-gray-700 dark:text-gray-200 mt-1">{item.description}</p>
+                        )}
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {item.quantity} × ${Number(item.unitPrice).toFixed(2)}
+                        </p>
                       </div>
-                      <p className="text-sm text-gray-900 dark:text-white mt-1">{charge.description}</p>
-                      <p className="text-xs text-gray-500 dark:text-zinc-400">Date: {charge.date}</p>
+                      <div className="text-right ml-4">
+                        <p className={`font-medium text-sm ${item.voidedAt ? 'line-through text-gray-400' : 'text-gray-900 dark:text-white'}`}>
+                          ${Number(item.amount).toFixed(2)}
+                        </p>
+                        {!item.voidedAt && viewFolio.status === 'OPEN' && (
+                          <button
+                            onClick={() => handleVoidItem(viewFolio.id, item.id)}
+                            className="text-xs text-red-500 hover:text-red-700 mt-1"
+                          >
+                            Void
+                          </button>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-right ml-4">
-                      <p className="font-medium text-gray-900 dark:text-white">${charge.amount.toFixed(2)}</p>
-                      <span className={`text-xs ${charge.isPaid ? 'text-green-600' : 'text-yellow-600'}`}>
-                        {charge.isPaid ? 'Paid' : 'Pending'}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
 
-            {/* Total */}
-            <div className="bg-gray-50 dark:bg-zinc-700/40 rounded-lg p-4">
+            <div className="bg-gray-50 dark:bg-zinc-700/40 rounded-lg p-4 border-t border-gray-200 dark:border-zinc-700">
               <div className="flex justify-between items-center">
-                <span className="text-lg font-semibold text-gray-900 dark:text-white">Total Amount</span>
-                <span className="text-2xl font-bold text-gray-900 dark:text-white">${invoiceTotal.toFixed(2)}</span>
+                <span className="text-lg font-semibold text-gray-900 dark:text-white">Total</span>
+                <span className="text-2xl font-bold text-gray-900 dark:text-white">${Number(viewFolio.totalAmount).toFixed(2)}</span>
               </div>
-              <div className="mt-2 text-sm text-gray-600 dark:text-gray-300">
-                Paid: ${invoiceCharges.filter(c => c.isPaid).reduce((sum, c) => sum + c.amount, 0).toFixed(2)}
-              </div>
-              <div className="text-sm text-gray-600 dark:text-gray-300">
-                Balance Due: ${invoiceCharges.filter(c => !c.isPaid).reduce((sum, c) => sum + c.amount, 0).toFixed(2)}
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="text-center text-sm text-gray-500 dark:text-zinc-400 pt-4 border-t border-gray-200 dark:border-zinc-700">
-              <p>Thank you for choosing Hotel Manager</p>
             </div>
           </div>
         </Modal>

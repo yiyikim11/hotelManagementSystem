@@ -14,6 +14,8 @@ import hotelpms.pms.reservation.entity.Reservation;
 import hotelpms.pms.reservation.entity.ReservationStatus;
 import hotelpms.pms.reservation.repository.ReservationRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,6 +31,10 @@ public class FolioService {
     private final FolioRepository folioRepository;
     private final ReservationRepository reservationRepository;
     private final UserRepository userRepository;
+
+    public Page<FolioResponse> list(Pageable pageable) {
+        return folioRepository.findAll(pageable).map(FolioResponse::from);
+    }
 
     public FolioResponse findByReservation(UUID reservationId) {
         return FolioResponse.from(getFolioByReservation(reservationId));

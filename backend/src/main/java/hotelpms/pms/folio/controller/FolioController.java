@@ -5,6 +5,8 @@ import hotelpms.pms.folio.dto.PostFolioItemRequest;
 import hotelpms.pms.folio.service.FolioService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -21,6 +23,11 @@ import java.util.UUID;
 public class FolioController {
 
     private final FolioService folioService;
+
+    @GetMapping
+    public ResponseEntity<Page<FolioResponse>> list(Pageable pageable) {
+        return ResponseEntity.ok(folioService.list(pageable));
+    }
 
     @GetMapping("/{id}")
     public ResponseEntity<FolioResponse> get(@PathVariable UUID id) {

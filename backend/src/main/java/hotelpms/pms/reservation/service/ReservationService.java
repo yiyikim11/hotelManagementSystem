@@ -19,7 +19,10 @@ import hotelpms.pms.reservation.entity.ReservationRoom;
 import hotelpms.pms.reservation.entity.ReservationStatus;
 import hotelpms.pms.reservation.repository.ReservationRepository;
 import hotelpms.pms.reservation.repository.ReservationRoomRepository;
+import hotelpms.pms.room.entity.Room;
+import hotelpms.pms.room.entity.RoomStatus;
 import hotelpms.pms.room.entity.RoomType;
+import hotelpms.pms.room.repository.RoomRepository;
 import hotelpms.pms.room.repository.RoomTypeRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -45,6 +48,7 @@ public class ReservationService {
     private final GuestRepository guestRepository;
     private final RatePlanRepository ratePlanRepository;
     private final RoomTypeRepository roomTypeRepository;
+    private final RoomRepository roomRepository;
     private final CancellationPolicyRepository cancellationPolicyRepository;
     private final DailyRoomRateRepository dailyRoomRateRepository;
 
@@ -62,6 +66,11 @@ public class ReservationService {
 
     @Transactional
     public ReservationResponse create(CreateReservationRequest req) {
+        return create(req, ReservationStatus.CONFIRMED);
+    }
+
+    @Transactional
+    public ReservationResponse create(CreateReservationRequest req, ReservationStatus initialStatus) {
         if (req.arrivalDate().isAfter(req.departureDate()) || req.arrivalDate().equals(req.departureDate())) {
             throw new IllegalArgumentException("Departure date must be after arrival date");
         }
@@ -75,7 +84,7 @@ public class ReservationService {
         reservation.setConfirmationNumber(generateConfirmationNumber());
         reservation.setGuest(guest);
         reservation.setRatePlan(ratePlan);
-        reservation.setStatus(ReservationStatus.CONFIRMED);
+        reservation.setStatus(initialStatus);
         reservation.setSource(req.source());
         reservation.setArrivalDate(req.arrivalDate());
         reservation.setDepartureDate(req.departureDate());
@@ -96,6 +105,28 @@ public class ReservationService {
         return ReservationResponse.from(reservationRepository.save(reservation));
     }
 
+    /** Subtract a discount from the reservation total (called after promo is validated). */
+    @Transactional
+    public ReservationResponse applyDiscount(java.util.UUID id, BigDecimal discountAmount) {
+        Reservation reservation = get(id);
+        BigDecimal newTotal = reservation.getTotalAmount().subtract(discountAmount)
+                .max(BigDecimal.ZERO);
+        reservation.setTotalAmount(newTotal);
+        return ReservationResponse.from(reservationRepository.save(reservation));
+    }
+
+    /** Transition PENDING_PAYMENT → CONFIRMED and record the paid amount. */
+    @Transactional
+    public ReservationResponse confirmPayment(java.util.UUID id, BigDecimal amount) {
+        Reservation reservation = get(id);
+        if (reservation.getStatus() != ReservationStatus.PENDING_PAYMENT) {
+            throw new ConflictException("Reservation is not awaiting payment, current status: " + reservation.getStatus());
+        }
+        reservation.setPaidAmount(reservation.getPaidAmount().add(amount));
+        reservation.setStatus(ReservationStatus.CONFIRMED);
+        return ReservationResponse.from(reservationRepository.save(reservation));
+    }
+
     @Transactional
     public ReservationResponse checkIn(UUID id) {
         Reservation reservation = get(id);
@@ -104,7 +135,22 @@ public class ReservationService {
         }
         reservation.setStatus(ReservationStatus.CHECKED_IN);
         Instant now = Instant.now();
-        reservation.getRooms().forEach(rr -> rr.setCheckedInAt(now));
+        reservation.getRooms().forEach(rr -> {
+            rr.setCheckedInAt(now);
+            if (rr.getRoom() == null) {
+                Room room = roomRepository.findByRoomTypeId(rr.getRoomType().getId()).stream()
+                        .filter(r -> r.getStatus() == RoomStatus.AVAILABLE)
+                        .findFirst()
+                        .orElseThrow(() -> new ConflictException(
+                                "No available room of type " + rr.getRoomType().getCode() + " to assign"));
+                rr.setRoom(room);
+                room.setStatus(RoomStatus.OCCUPIED);
+                roomRepository.save(room);
+            } else {
+                rr.getRoom().setStatus(RoomStatus.OCCUPIED);
+                roomRepository.save(rr.getRoom());
+            }
+        });
         return ReservationResponse.from(reservationRepository.save(reservation));
     }
 
@@ -116,7 +162,13 @@ public class ReservationService {
         }
         reservation.setStatus(ReservationStatus.CHECKED_OUT);
         Instant now = Instant.now();
-        reservation.getRooms().forEach(rr -> rr.setCheckedOutAt(now));
+        reservation.getRooms().forEach(rr -> {
+            rr.setCheckedOutAt(now);
+            if (rr.getRoom() != null) {
+                rr.getRoom().setStatus(RoomStatus.AVAILABLE);
+                roomRepository.save(rr.getRoom());
+            }
+        });
         return ReservationResponse.from(reservationRepository.save(reservation));
     }
 
