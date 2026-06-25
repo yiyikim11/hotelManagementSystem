@@ -35,4 +35,7 @@ public class RoomType extends BaseEntity {
 
     @Column(nullable = false, length = 3)
     private String currency = "USD";
+
+    @Column(nullable = false)
+    private boolean archived = false;
 }

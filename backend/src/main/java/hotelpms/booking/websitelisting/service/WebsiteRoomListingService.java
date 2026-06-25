@@ -5,6 +5,7 @@ import hotelpms.booking.websitelisting.dto.WebsiteRoomListingResponse;
 import hotelpms.booking.websitelisting.entity.WebsiteRoomListing;
 import hotelpms.booking.websitelisting.repository.WebsiteRoomListingRepository;
 import hotelpms.common.exception.NotFoundException;
+import hotelpms.pms.room.dto.PublicRoomTypeResponse;
 import hotelpms.pms.room.entity.RoomType;
 import hotelpms.pms.room.repository.RoomTypeRepository;
 import lombok.RequiredArgsConstructor;
@@ -32,7 +33,7 @@ public class WebsiteRoomListingService {
         Map<UUID, WebsiteRoomListing> byType = repository.findAll().stream()
                 .collect(Collectors.toMap(l -> l.getRoomType().getId(), l -> l));
         List<WebsiteRoomListingResponse> out = new ArrayList<>();
-        for (RoomType rt : roomTypeRepository.findAll()) {
+        for (RoomType rt : roomTypeRepository.findByArchivedFalse()) {
             WebsiteRoomListing l = byType.get(rt.getId());
             if (l == null) {
                 l = new WebsiteRoomListing();
@@ -55,6 +56,23 @@ public class WebsiteRoomListingService {
     public Map<UUID, WebsiteRoomListing> findAllByRoomTypeId() {
         return repository.findAll().stream()
                 .collect(Collectors.toMap(l -> l.getRoomType().getId(), l -> l));
+    }
+
+    @Transactional(readOnly = true)
+    public PublicRoomTypeResponse findPublishedRoomType(UUID roomTypeId) {
+        WebsiteRoomListing listing = repository.findByRoomType_Id(roomTypeId)
+                .filter(WebsiteRoomListing::isPublished)
+                .filter(l -> !l.getRoomType().isArchived())
+                .orElseThrow(() -> new NotFoundException("Published room type not found: " + roomTypeId));
+        return PublicRoomTypeResponse.from(listing.getRoomType(), listing);
+    }
+
+    @Transactional(readOnly = true)
+    public boolean isPubliclyBookable(UUID roomTypeId) {
+        return repository.findByRoomType_Id(roomTypeId)
+                .filter(WebsiteRoomListing::isPublished)
+                .map(l -> !l.getRoomType().isArchived())
+                .orElse(false);
     }
 
     public WebsiteRoomListingResponse upsert(UUID roomTypeId, WebsiteRoomListingRequest req) {

@@ -30,7 +30,15 @@ public class RoomTypeService {
 
     @Transactional(readOnly = true)
     public Page<RoomTypeResponse> list(Pageable pageable) {
-        return roomTypeRepository.findAll(pageable).map(RoomTypeResponse::from);
+        return list(pageable, false);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<RoomTypeResponse> list(Pageable pageable, boolean includeArchived) {
+        Page<RoomType> page = includeArchived
+                ? roomTypeRepository.findAll(pageable)
+                : roomTypeRepository.findByArchivedFalse(pageable);
+        return page.map(RoomTypeResponse::from);
     }
 
     @Transactional(readOnly = true)
@@ -43,7 +51,7 @@ public class RoomTypeService {
         if (from.isAfter(to)) {
             throw new IllegalArgumentException("'from' date must not be after 'to' date");
         }
-        return roomTypeRepository.findAll().stream()
+        return roomTypeRepository.findByArchivedFalse().stream()
                 .map(rt -> {
                     long total = roomRepository.countByRoomTypeId(rt.getId());
                     long occupied = reservationRoomRepository
@@ -71,8 +79,22 @@ public class RoomTypeService {
         return RoomTypeResponse.from(roomTypeRepository.save(rt));
     }
 
+    /** Soft-delete: archive the room type. Existing rooms and reservation history remain intact. */
     public void delete(UUID id) {
-        roomTypeRepository.delete(getOrThrow(id));
+        RoomType rt = getOrThrow(id);
+        if (!rt.isArchived()) {
+            rt.setArchived(true);
+            roomTypeRepository.save(rt);
+        }
+    }
+
+    public RoomTypeResponse restore(UUID id) {
+        RoomType rt = getOrThrow(id);
+        if (rt.isArchived()) {
+            rt.setArchived(false);
+            rt = roomTypeRepository.save(rt);
+        }
+        return RoomTypeResponse.from(rt);
     }
 
     private void applyRequest(RoomType rt, RoomTypeRequest req) {

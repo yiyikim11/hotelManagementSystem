@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import { CreditCard, Lock, User, Mail, Phone, Tag, Check, AlertCircle, Loader } from 'lucide-react';
-import { roomTypesApi, type RoomType } from '../../services/pms/roomTypesApi';
-import { publicBookingsApi, type PromoValidateResponse } from '../../services/booking/publicBookingsApi';
+import { roomTypesApi, type PublicRoomType } from '../../services/pms/roomTypesApi';
+import { publicBookingsApi, type PromoValidateResponse, type PublicPromoCode } from '../../services/booking/publicBookingsApi';
 
 function calculateNights(from: string, to: string) {
   return Math.max(1, Math.round((new Date(to).getTime() - new Date(from).getTime()) / 86_400_000));
@@ -40,12 +40,13 @@ export default function PublicCheckout() {
 
   const nights = calculateNights(checkIn, checkOut);
 
-  const [roomType, setRoomType] = useState<RoomType | null>(null);
+  const [roomType, setRoomType] = useState<PublicRoomType | null>(null);
   const [loadingRoom, setLoadingRoom] = useState(true);
 
   const [guestData, setGuestData] = useState({ firstName: '', lastName: '', email: '', phone: '', specialRequests: '' });
   const [cardData, setCardData] = useState({ number: '', name: '', expiry: '', cvv: '' });
   const [promoCodeInput, setPromoCodeInput] = useState(promoCodeFromUrl);
+  const [availablePromos, setAvailablePromos] = useState<PublicPromoCode[]>([]);
   const [validatedPromo, setValidatedPromo] = useState<PromoValidateResponse | null>(null);
   const [promoError, setPromoError] = useState('');
   const [isValidatingPromo, setIsValidatingPromo] = useState(false);
@@ -55,7 +56,7 @@ export default function PublicCheckout() {
   const loadRoom = useCallback(async () => {
     if (!roomTypeId) return;
     try {
-      const rt = await roomTypesApi.get(roomTypeId);
+      const rt = await roomTypesApi.getPublic(roomTypeId);
       setRoomType(rt);
     } catch {
       // room not found — handled below via null check
@@ -65,6 +66,25 @@ export default function PublicCheckout() {
   }, [roomTypeId]);
 
   useEffect(() => { loadRoom(); }, [loadRoom]);
+
+  // Load the list of promo codes a guest can apply
+  useEffect(() => {
+    publicBookingsApi.listPromoCodes()
+      .then(setAvailablePromos)
+      .catch(() => setAvailablePromos([]));
+  }, []);
+
+  // Whether a promo code's rules fit the current stay (nights + room type).
+  // Used only to label the list — the backend remains the source of truth on Apply.
+  const promoApplicability = useCallback((promo: PublicPromoCode): string => {
+    if (nights < promo.minNights) return `Min ${promo.minNights} nights`;
+    if (promo.maxNights != null && nights > promo.maxNights) return `Max ${promo.maxNights} nights`;
+    if (roomTypeId && promo.applicableRoomTypeIds.length > 0
+        && !promo.applicableRoomTypeIds.includes(roomTypeId)) {
+      return 'Not for this room';
+    }
+    return '';
+  }, [nights, roomTypeId]);
 
   // Auto-validate promo code that arrived from the offers/room-listing page
   useEffect(() => {
@@ -288,6 +308,49 @@ export default function PublicCheckout() {
                           ? `${validatedPromo.discountValue}% off`
                           : `$${validatedPromo.discountValue} off`} applied!
                       </span>
+                    </div>
+                  )}
+
+                  {/* Available promo codes the guest can apply */}
+                  {availablePromos.length > 0 && (
+                    <div className="mt-3">
+                      <p className="text-xs font-medium text-gray-500 mb-2">Available offers</p>
+                      <div className="space-y-2">
+                        {availablePromos.map((promo) => {
+                          const reason = promoApplicability(promo);
+                          const applicable = reason === '';
+                          const isApplied = validatedPromo != null && promoCodeInput === promo.code;
+                          const discountLabel = promo.discountType === 'PERCENTAGE'
+                            ? `${promo.discountValue}% off`
+                            : `$${promo.discountValue} off`;
+                          return (
+                            <div
+                              key={promo.code}
+                              className={`flex items-center justify-between gap-3 p-3 rounded-lg border ${
+                                applicable ? 'border-gray-200 bg-gray-50' : 'border-gray-100 bg-gray-50 opacity-60'
+                              }`}
+                            >
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-mono text-sm font-semibold text-gray-900">{promo.code}</span>
+                                  <span className="text-xs font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded">{discountLabel}</span>
+                                </div>
+                                <p className="text-xs text-gray-500 truncate">
+                                  {promo.packageName}{!applicable && ` · ${reason}`}
+                                </p>
+                              </div>
+                              <button
+                                type="button"
+                                disabled={!applicable || isValidatingPromo || isApplied}
+                                onClick={() => handleValidatePromo(promo.code)}
+                                className="flex-shrink-0 px-3 py-1.5 text-sm font-medium rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-50 bg-blue-600 text-white hover:bg-blue-700"
+                              >
+                                {isApplied ? 'Applied' : 'Apply'}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
                 </div>

@@ -5,6 +5,7 @@ import hotelpms.booking.onlinebooking.service.OnlineBookingService;
 import hotelpms.booking.promo.dto.PromotionalPackageResponse;
 import hotelpms.booking.promo.dto.PromoValidateRequest;
 import hotelpms.booking.promo.dto.PromoValidateResponse;
+import hotelpms.booking.promo.dto.PublicPromoCodeResponse;
 import hotelpms.booking.promo.service.PromotionService;
 import hotelpms.pms.reservation.dto.ReservationResponse;
 import jakarta.validation.Valid;
@@ -38,6 +39,11 @@ public class OnlineBookingController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(required = false) UUID roomTypeId) {
         return ResponseEntity.ok(promotionService.listActiveOffers(from, to, roomTypeId));
+    }
+
+    @GetMapping("/public/promo/codes")
+    public ResponseEntity<List<PublicPromoCodeResponse>> listPromoCodes() {
+        return ResponseEntity.ok(promotionService.listPublicPromoCodes());
     }
 
     @PostMapping("/public/promo/validate")

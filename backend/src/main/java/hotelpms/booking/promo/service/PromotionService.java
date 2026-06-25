@@ -109,6 +109,27 @@ public class PromotionService {
             .stream().map(PromotionalPackageResponse::from).toList();
     }
 
+    /** Customer-facing list of currently-applicable promo codes with their discount terms. */
+    public List<PublicPromoCodeResponse> listPublicPromoCodes() {
+        return promoCodeRepository.findActivePublic(Instant.now()).stream()
+            .map(c -> {
+                PromotionalPackage pkg = c.getPromotionalPackage();
+                return new PublicPromoCodeResponse(
+                    c.getCode(),
+                    pkg.getName(),
+                    pkg.getDescription(),
+                    pkg.getDiscountType(),
+                    pkg.getDiscountValue(),
+                    pkg.getMinNights(),
+                    pkg.getMaxNights(),
+                    pkg.getValidFrom(),
+                    pkg.getValidTo(),
+                    pkg.getApplicableRoomTypes().stream().map(RoomType::getId).toList()
+                );
+            })
+            .toList();
+    }
+
     // ── Public: Validate Promo ───────────────────────────────────────────────
 
     public PromoValidateResponse validatePromo(

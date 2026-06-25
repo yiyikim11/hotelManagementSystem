@@ -10,6 +10,7 @@ export interface RoomType {
   maxOccupancy: number;
   baseRate: number;
   currency: string;
+  archived: boolean;
 }
 
 export interface RoomTypeRequest {
@@ -33,8 +34,14 @@ export interface AvailabilityItem {
 }
 
 export const roomTypesApi = {
-  list: (page = 0, size = 100) =>
-    api.get<Page<RoomType>>(`/pms/room-types?${new URLSearchParams({ page: String(page), size: String(size) })}`),
+  list: (page = 0, size = 100, includeArchived = false) =>
+    api.get<Page<RoomType>>(
+      `/pms/room-types?${new URLSearchParams({
+        page: String(page),
+        size: String(size),
+        includeArchived: String(includeArchived),
+      })}`
+    ),
 
   get: (id: string) => api.get<RoomType>(`/pms/room-types/${id}`),
 
@@ -44,11 +51,16 @@ export const roomTypesApi = {
 
   delete: (id: string) => api.delete<void>(`/pms/room-types/${id}`),
 
+  restore: (id: string) => api.post<RoomType>(`/pms/room-types/${id}/restore`, {}),
+
   availability: (from: string, to: string) =>
     api.get<AvailabilityItem[]>(`/pms/room-types/availability?${new URLSearchParams({ from, to })}`),
 
   listPublic: () =>
     api.get<PublicRoomType[]>(`/public/room-types`),
+
+  getPublic: (id: string) =>
+    api.get<PublicRoomType>(`/public/room-types/${id}`),
 
   availabilityPublic: (from: string, to: string) =>
     api.get<AvailabilityItem[]>(`/public/room-types/availability?${new URLSearchParams({ from, to })}`),

@@ -44,6 +44,19 @@ export interface PromoValidateResponse {
   minNights: number;
 }
 
+export interface PublicPromoCode {
+  code: string;
+  packageName: string;
+  description: string | null;
+  discountType: 'PERCENTAGE' | 'FIXED_AMOUNT';
+  discountValue: number;
+  minNights: number;
+  maxNights: number | null;
+  validFrom: string;
+  validTo: string;
+  applicableRoomTypeIds: string[];
+}
+
 export interface PayRequest {
   gateway: string;
   gatewayTransactionId: string;
@@ -55,6 +68,9 @@ export interface PayRequest {
 }
 
 export const publicBookingsApi = {
+  listPromoCodes: () =>
+    api.get<PublicPromoCode[]>('/public/promo/codes'),
+
   validatePromo: (req: PromoValidateRequest) =>
     api.post<PromoValidateResponse>('/public/promo/validate', req),
 

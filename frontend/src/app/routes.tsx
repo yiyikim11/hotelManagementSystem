@@ -12,6 +12,7 @@ import PMSUsers from "./components/pms/Users";
 import PMSRatePlans from "./components/pms/RatePlans";
 import PMSCancellationPolicies from "./components/pms/CancellationPolicies";
 import PMSRoomTypes from "./components/pms/RoomTypes";
+import PMSRooms from "./components/pms/Rooms";
 import BookingRooms from "./components/booking/Rooms";
 import BookingPromoCodes from "./components/booking/PromoCodes";
 import BookingNotifications from "./components/booking/Notifications";
@@ -67,6 +68,7 @@ export const router = createBrowserRouter([
       { path: "pms/rate-plans", Component: PMSRatePlans },
       { path: "pms/cancellation-policies", Component: PMSCancellationPolicies },
       { path: "pms/room-types", Component: PMSRoomTypes },
+      { path: "pms/rooms", Component: PMSRooms },
       { path: "booking/rooms", Component: BookingRooms },
       { path: "booking/promo-codes", Component: BookingPromoCodes },
       { path: "booking/notifications", Component: BookingNotifications },

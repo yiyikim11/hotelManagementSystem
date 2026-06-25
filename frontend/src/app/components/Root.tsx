@@ -33,6 +33,7 @@ export default function Root() {
         { name: "Guest Profiles", path: "/admin/pms/guests" },
         { name: "Front Office", path: "/admin/pms/front-office" },
         { name: "Room Types", path: "/admin/pms/room-types" },
+        { name: "Rooms", path: "/admin/pms/rooms" },
         { name: "Rate Plans", path: "/admin/pms/rate-plans" },
         { name: "Cancellation Policies", path: "/admin/pms/cancellation-policies" },
         { name: "User Management", path: "/admin/pms/users" },
