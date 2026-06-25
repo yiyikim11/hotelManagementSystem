@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Plus, Edit2, Trash2, Bed, Users, DollarSign } from 'lucide-react';
+import { Plus, Edit2, Archive, ArchiveRestore, Bed, Users, DollarSign } from 'lucide-react';
 import { roomTypesApi, type RoomType, type RoomTypeRequest } from '../../services/pms/roomTypesApi';
+import { websiteListingsApi } from '../../services/booking/websiteListingsApi';
 import FormModal from '../shared/FormModal';
 
 const emptyForm: Omit<RoomTypeRequest, 'baseOccupancy' | 'maxOccupancy' | 'baseRate'> & {
-  baseOccupancy: string; maxOccupancy: string; baseRate: string;
+  baseOccupancy: string; maxOccupancy: string; baseRate: string; websitePhotos: string;
 } = {
   code: '', name: '', description: '',
-  baseOccupancy: '2', maxOccupancy: '2', baseRate: '', currency: 'USD',
+  baseOccupancy: '2', maxOccupancy: '2', baseRate: '', currency: 'USD', websitePhotos: '',
 };
 
 export default function RoomTypes() {
@@ -17,19 +18,20 @@ export default function RoomTypes() {
   const [showModal, setShowModal] = useState(false);
   const [editingType, setEditingType] = useState<RoomType | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [showArchived, setShowArchived] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const page = await roomTypesApi.list();
+      const page = await roomTypesApi.list(0, 100, showArchived);
       setRoomTypes(page.content);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load room types');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [showArchived]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -44,7 +46,7 @@ export default function RoomTypes() {
     setForm({
       code: rt.code, name: rt.name, description: rt.description ?? '',
       baseOccupancy: String(rt.baseOccupancy), maxOccupancy: String(rt.maxOccupancy),
-      baseRate: String(rt.baseRate), currency: rt.currency,
+      baseRate: String(rt.baseRate), currency: rt.currency, websitePhotos: '',
     });
     setShowModal(true);
   };
@@ -57,26 +59,47 @@ export default function RoomTypes() {
       baseRate: parseFloat(form.baseRate),
       currency: form.currency,
     };
+    let photoSaveError = '';
     try {
       if (editingType) {
         await roomTypesApi.update(editingType.id, payload);
       } else {
-        await roomTypesApi.create(payload);
+        const created = await roomTypesApi.create(payload);
+        const photos = form.websitePhotos.split('\n').map(p => p.trim()).filter(Boolean);
+        if (photos.length > 0) {
+          try {
+            await websiteListingsApi.upsert(created.id, { websitePhotos: photos });
+          } catch (e) {
+            photoSaveError = e instanceof Error
+              ? `Room type created, but website photos were not saved: ${e.message}`
+              : 'Room type created, but website photos were not saved';
+          }
+        }
       }
       setShowModal(false);
-      load();
+      await load();
+      if (photoSaveError) setError(photoSaveError);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to save room type');
     }
   };
 
-  const handleDelete = async (rt: RoomType) => {
-    if (!confirm(`Delete room type "${rt.name}"?`)) return;
+  const handleArchive = async (rt: RoomType) => {
+    if (!confirm(`Archive room type "${rt.name}"? Existing rooms and reservations keep referencing it, but it will be hidden from listings.`)) return;
     try {
       await roomTypesApi.delete(rt.id);
       load();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to delete room type');
+      setError(e instanceof Error ? e.message : 'Failed to archive room type');
+    }
+  };
+
+  const handleRestore = async (rt: RoomType) => {
+    try {
+      await roomTypesApi.restore(rt.id);
+      load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to restore room type');
     }
   };
 
@@ -87,10 +110,21 @@ export default function RoomTypes() {
           <h1 className="text-2xl font-bold text-gray-900">Room Types</h1>
           <p className="text-gray-600 mt-1">Manage room categories and base rates</p>
         </div>
-        <button onClick={handleAdd}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
-          <Plus className="w-5 h-5" /> Add Room Type
-        </button>
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 text-sm text-gray-600 select-none">
+            <input
+              type="checkbox"
+              checked={showArchived}
+              onChange={(e) => setShowArchived(e.target.checked)}
+              className="rounded border-gray-300"
+            />
+            Show archived
+          </label>
+          <button onClick={handleAdd}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+            <Plus className="w-5 h-5" /> Add Room Type
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -102,20 +136,33 @@ export default function RoomTypes() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {roomTypes.map(rt => (
-            <div key={rt.id} className="bg-white rounded-lg shadow p-6 space-y-4">
+            <div key={rt.id} className={`bg-white rounded-lg shadow p-6 space-y-4 ${rt.archived ? 'opacity-60' : ''}`}>
               <div className="flex items-start justify-between">
                 <div>
-                  <span className="text-xs font-mono bg-blue-100 text-blue-700 px-2 py-0.5 rounded">{rt.code}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-mono bg-blue-100 text-blue-700 px-2 py-0.5 rounded">{rt.code}</span>
+                    {rt.archived && (
+                      <span className="text-xs font-medium bg-gray-200 text-gray-700 px-2 py-0.5 rounded">Archived</span>
+                    )}
+                  </div>
                   <h3 className="text-lg font-semibold text-gray-900 mt-1">{rt.name}</h3>
                   {rt.description && <p className="text-sm text-gray-500 mt-1">{rt.description}</p>}
                 </div>
                 <div className="flex gap-1">
-                  <button onClick={() => handleEdit(rt)} className="p-1 text-blue-600 hover:bg-blue-50 rounded" title="Edit">
-                    <Edit2 className="w-4 h-4" />
-                  </button>
-                  <button onClick={() => handleDelete(rt)} className="p-1 text-red-600 hover:bg-red-50 rounded" title="Delete">
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  {!rt.archived && (
+                    <button onClick={() => handleEdit(rt)} className="p-1 text-blue-600 hover:bg-blue-50 rounded" title="Edit">
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                  )}
+                  {rt.archived ? (
+                    <button onClick={() => handleRestore(rt)} className="p-1 text-green-600 hover:bg-green-50 rounded" title="Restore">
+                      <ArchiveRestore className="w-4 h-4" />
+                    </button>
+                  ) : (
+                    <button onClick={() => handleArchive(rt)} className="p-1 text-red-600 hover:bg-red-50 rounded" title="Archive">
+                      <Archive className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-3 pt-2 border-t border-gray-100">
@@ -176,6 +223,19 @@ export default function RoomTypes() {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
           </div>
+          {!editingType && (
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Website Photos</label>
+              <textarea
+                value={form.websitePhotos}
+                onChange={(e) => setForm({ ...form, websitePhotos: e.target.value })}
+                rows={4}
+                placeholder="https://example.com/room-photo.jpg"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+              />
+              <p className="text-xs text-gray-500 mt-1">Optional. Add one image URL per line. The room still stays unpublished until you publish it in Booking Engine.</p>
+            </div>
+          )}
         </div>
       </FormModal>
     </div>

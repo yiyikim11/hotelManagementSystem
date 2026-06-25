@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -33,14 +34,20 @@ public class PublicRoomTypeController {
     @GetMapping
     public ResponseEntity<List<PublicRoomTypeResponse>> list() {
         Map<UUID, WebsiteRoomListing> listings = listingService.findAllByRoomTypeId();
-        List<RoomType> all = roomTypeRepository.findAll();
-        List<PublicRoomTypeResponse> out = all.stream()
-                .map(rt -> Map.entry(rt, listings.get(rt.getId())))
-                .filter(e -> e.getValue() != null && e.getValue().isPublished())
-                .sorted(Comparator.comparingInt(e -> e.getValue().getDisplayOrder()))
-                .map(e -> PublicRoomTypeResponse.from(e.getKey(), e.getValue()))
+        List<PublicRoomTypeResponse> out = roomTypeRepository.findByArchivedFalse().stream()
+                .filter(rt -> {
+                    WebsiteRoomListing l = listings.get(rt.getId());
+                    return l != null && l.isPublished();
+                })
+                .sorted(Comparator.comparingInt(rt -> listings.get(rt.getId()).getDisplayOrder()))
+                .map(rt -> PublicRoomTypeResponse.from(rt, listings.get(rt.getId())))
                 .toList();
         return ResponseEntity.ok(out);
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<PublicRoomTypeResponse> get(@PathVariable UUID id) {
+        return ResponseEntity.ok(listingService.findPublishedRoomType(id));
     }
 
     @GetMapping("/availability")

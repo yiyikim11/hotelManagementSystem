@@ -8,6 +8,7 @@ import hotelpms.booking.promo.entity.ReservationPromoCode;
 import hotelpms.booking.promo.repository.PromoCodeRepository;
 import hotelpms.booking.promo.repository.ReservationPromoCodeRepository;
 import hotelpms.booking.promo.service.PromotionService;
+import hotelpms.booking.websitelisting.service.WebsiteRoomListingService;
 import hotelpms.common.exception.ConflictException;
 import hotelpms.common.exception.NotFoundException;
 import hotelpms.pms.guest.entity.Guest;
@@ -52,6 +53,7 @@ public class OnlineBookingService {
     private final PromoCodeRepository promoCodeRepository;
     private final ReservationPromoCodeRepository reservationPromoCodeRepository;
     private final OnlinePaymentService paymentService;
+    private final WebsiteRoomListingService websiteRoomListingService;
 
     // ── Create booking ────────────────────────────────────────────────────────
 
@@ -59,6 +61,9 @@ public class OnlineBookingService {
     public OnlineBookingResponse createBooking(CreateOnlineBookingRequest req) {
         if (!req.arrivalDate().isBefore(req.departureDate())) {
             throw new IllegalArgumentException("Departure date must be after arrival date");
+        }
+        if (!websiteRoomListingService.isPubliclyBookable(req.roomTypeId())) {
+            throw new NotFoundException("Published room type not found: " + req.roomTypeId());
         }
 
         // 1. Upsert guest by email

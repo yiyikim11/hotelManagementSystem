@@ -13,11 +13,13 @@ public record RoomTypeResponse(
     int baseOccupancy,
     int maxOccupancy,
     BigDecimal baseRate,
-    String currency
+    String currency,
+    boolean archived
 ) {
     public static RoomTypeResponse from(RoomType rt) {
         return new RoomTypeResponse(
                 rt.getId(), rt.getCode(), rt.getName(), rt.getDescription(),
-                rt.getBaseOccupancy(), rt.getMaxOccupancy(), rt.getBaseRate(), rt.getCurrency());
+                rt.getBaseOccupancy(), rt.getMaxOccupancy(), rt.getBaseRate(), rt.getCurrency(),
+                rt.isArchived());
     }
 }

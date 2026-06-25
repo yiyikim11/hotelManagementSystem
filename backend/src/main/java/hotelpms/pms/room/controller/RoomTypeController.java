@@ -27,8 +27,10 @@ public class RoomTypeController {
 
     @GetMapping
     @PreAuthorize("hasAuthority('ROOMS_READ')")
-    public ResponseEntity<Page<RoomTypeResponse>> list(Pageable pageable) {
-        return ResponseEntity.ok(roomTypeService.list(pageable));
+    public ResponseEntity<Page<RoomTypeResponse>> list(
+            Pageable pageable,
+            @RequestParam(name = "includeArchived", defaultValue = "false") boolean includeArchived) {
+        return ResponseEntity.ok(roomTypeService.list(pageable, includeArchived));
     }
 
     @GetMapping("/availability")
@@ -63,5 +65,11 @@ public class RoomTypeController {
     public ResponseEntity<Void> delete(@PathVariable UUID id) {
         roomTypeService.delete(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/{id}/restore")
+    @PreAuthorize("hasAuthority('ROOMS_WRITE')")
+    public ResponseEntity<RoomTypeResponse> restore(@PathVariable UUID id) {
+        return ResponseEntity.ok(roomTypeService.restore(id));
     }
 }

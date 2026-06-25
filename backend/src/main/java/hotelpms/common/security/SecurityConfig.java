@@ -56,8 +56,10 @@ public class SecurityConfig {
                 // This matches the "booking reference as bearer" pattern used in the
                 // hotel industry. Revisit if guest portal authentication is added later.
                 .requestMatchers(HttpMethod.GET,  "/public/room-types").permitAll()
+                .requestMatchers(HttpMethod.GET,  "/public/room-types/*").permitAll()
                 .requestMatchers(HttpMethod.GET,  "/public/room-types/availability").permitAll()
                 .requestMatchers(HttpMethod.GET,  "/public/offers").permitAll()
+                .requestMatchers(HttpMethod.GET,  "/public/promo/codes").permitAll()
                 .requestMatchers(HttpMethod.POST, "/public/promo/validate").permitAll()
                 .requestMatchers(HttpMethod.GET,  "/public/bookings").permitAll()
                 // Single-segment `*` matches only /{id} — it does NOT match /{id}/pay or
