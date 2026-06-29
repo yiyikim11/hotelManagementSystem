@@ -31,11 +31,10 @@ export default function PublicLayout() {
                 <Link
                   key={item.path}
                   to={item.path}
-                  className={`text-sm font-medium transition-colors ${
-                    location.pathname === item.path
+                  className={`text-sm font-medium transition-colors ${location.pathname === item.path
                       ? "text-blue-600"
                       : "text-gray-700 hover:text-blue-600"
-                  }`}
+                    }`}
                 >
                   {item.name}
                 </Link>
@@ -46,7 +45,7 @@ export default function PublicLayout() {
               to="/login"
               className="text-sm font-medium text-gray-700 hover:text-blue-600"
             >
-              Staff Portal
+              Signin
             </Link>
           </div>
         </div>
