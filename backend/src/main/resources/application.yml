@@ -39,6 +39,8 @@ app:
     # If ADMIN_INITIAL_PASSWORD is absent a secure random password is generated
     # and printed once to the log — change it immediately afterwards.
     admin-email: ${ADMIN_EMAIL:admin@hotel.local}
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173,http://localhost:3000}
   security:
     jwt:
       secret: ${JWT_SECRET}

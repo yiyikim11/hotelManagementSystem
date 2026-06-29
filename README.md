@@ -99,3 +99,9 @@ Then add `"test": "vitest"` to `package.json` scripts.
 2. In one terminal: `cd backend && ./gradlew bootRun`
 3. In another: `cd frontend && npm run dev`
 4. Open http://localhost:5173 — the frontend talks to the backend at `http://localhost:8080`.
+
+---
+
+## Staging on DigitalOcean
+
+See **[DEPLOY.md](./DEPLOY.md)** for a one-URL staging setup (Docker + auto-deploy on push to `main`).

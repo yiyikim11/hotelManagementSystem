@@ -1,0 +1,8 @@
+.gradle
+build
+out
+bin
+.env
+*.log
+hs_err_pid*
+BOOT-INF
